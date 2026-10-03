@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>洄游 · Anabasis — 可旋转的 3D 粒子形态场</title>
-<meta name="description" content="六万个粒子在四种形态与「你的图片」之间洄游。three.js 单文件生成艺术作品，附完整出图与验收工具链。">
+<meta name="description" content="六万个粒子在四种形态、你的图片与任意文字之间洄游。three.js 单文件生成艺术作品，附完整出图与验收工具链。">
 <style>
   :root{
     --ink:#08090a; --ink-2:#101214; --line:#22262b;
@@ -64,7 +64,7 @@
     <h1>洄游<span class="en">Anabasis</span></h1>
     <p class="lede">
       六万个粒子在四种形态之间洄游——<b>鲸骨架 / 棱镜环 / 归潮字 / 星壳</b>，
-      以及第五种形态：<b>你上传的图片</b>。形态不是被建模出来的，是被吸引出来的；
+      以及第五种形态：<b>你上传的图片</b>、或<b>随手敲下的一段文字</b>。形态不是被建模出来的，是被吸引出来的；
       拖拽旋转，双击触发故障带。
     </p>
     <div class="cta">
@@ -80,7 +80,7 @@
   <div class="stage">
     <iframe src="anabasis-3d.html" title="洄游 · Anabasis" loading="lazy" allow="fullscreen"></iframe>
     <div class="stage-note">
-      <span>直接在框里玩：拖拽旋转 · 滚轮缩放 · 双击故障 · 拖入图片变粒子</span>
+      <span>直接在框里玩：拖拽旋转 · 滚轮缩放 · 双击故障 · 拖入图片变粒子 · 侧栏输入文字变粒子</span>
       <span><kbd>Ctrl</kbd>+<kbd>V</kbd> 粘贴图片即可成形</span>
     </div>
   </div>
@@ -94,6 +94,8 @@
       <figure><img src="media/anabasis-whale.webp" alt="鲸形态动画"><figcaption>鲸骨架 → 棱镜环（WebP 动图，48 帧循环）</figcaption></figure>
       <figure><img src="media/anabasis-image.webp" alt="图片形态动画"><figcaption>图片识别成粒子（WebP 动图，48 帧循环）</figcaption></figure>
       <figure><img src="media/still-word.png" alt="归潮字"><figcaption>归潮字 · frames=210</figcaption></figure>
+      <figure><img src="media/still-text-vlong.png" alt="文字形态：一整段文字成粒子"><figcaption>输入一整段文字 → 自动缩小折行</figcaption></figure>
+      <figure><img src="media/ui-wide-text.png" alt="界面"><figcaption>工作台：侧栏「文字 → 粒子」</figcaption></figure>
       <figure><img src="media/ui-wide-image.png" alt="界面"><figcaption>工作台：右侧铺满 + 原图对照卡</figcaption></figure>
     </div>
   </div>
@@ -107,6 +109,8 @@
       <div class="card"><h3>点云着色器</h3><p>距离衰减 alpha、层深加权、<code>gl_PointSize</code> 随视距放大；点精灵三段辉光 + <code>discard</code> 圆形掩膜。</p></div>
       <div class="card"><h3>屏幕空间故障带</h3><p>4 条水平带内 <code>mvPosition.x += glitchXOffset * gx</code>，双击即触发。</p></div>
       <div class="card"><h3>图片 → 粒子</h3><p>亮度 / 透明 / Sobel 边缘三模式识别，按亮度给深度浮雕，并按可见半高自动贴合取景框。</p></div>
+      <div class="card"><h3>文字 → 粒子</h3><p>任意长度文字自动排版：短句放大、长文缩小折行（中文逐字断、西文按词断），栅格化后复用同一套图片点云管线。</p></div>
+      <div class="card"><h3>无视觉也能验收</h3><p>排版栅格与粒子点云<em>双 ASCII 投影</em>逐格对照，再用 Pillow 独立渲染第三张交叉验证字形。</p></div>
       <div class="card"><h3>可复现出图</h3><p><code>?frames=N</code> 同步跑帧后停住并置 <code>__READY__</code>，配无头浏览器即可定格出图与动画序列。</p></div>
     </div>
     <pre><code>node tools/render-3d.mjs anabasis-3d.html out.png "frames=210&amp;shape=2&amp;cam=0.4,0.18,17.5"
