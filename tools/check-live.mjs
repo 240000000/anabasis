@@ -36,8 +36,11 @@ try {
     await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 })
     const t0 = Date.now()
     await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 120000 })
-    // 注意：__DIAG__ 先用空对象占位（initializeSystem），reportImage() 每帧才填满 —— 必须等 points 出现
-    const diag = await page.waitForFunction('(window.__DIAG__ && window.__DIAG__.points) ? window.__DIAG__ : null', { timeout: 120000 }).then(h => h.jsonValue())
+    // 注意：__DIAG__ 有两个阶段 —— initializeSystem() 只放 {points}，reportImage() 每帧才填满 weights/formation。
+    // 必须等到完整 diag，否则会读到只有 points 的占位对象（formation 为 undefined → 误判失败）。
+    const diag = await page.waitForFunction(
+        '(window.__DIAG__ && window.__DIAG__.points && window.__DIAG__.formation && window.__DIAG__.weights) ? window.__DIAG__ : null',
+        { timeout: 120000 }).then(h => h.jsonValue())
     const shot = outPng ? path.resolve(outPng) : null
     if (shot) await page.screenshot({ path: shot })
     const size = await page.evaluate(() => { const c = document.querySelector('canvas'); return c ? [c.width, c.height, c.clientWidth, c.clientHeight] : null })
