@@ -102,6 +102,7 @@ python -m http.server 8000
 | `tools/analyze-imgrows.mjs` | 反推每个粒子对应的图片像素，按行统计 z/y（排查取景溢出） |
 | `tools/rows-profile.mjs` | 逐水平带亮度剖面（判断内容是否贴边） |
 | `tools/probe-webgl.mjs` | 无头 WebGL 可用性探针（SwiftShader/ANGLE 自检） |
+| `tools/check-live.mjs` | 线上部署端到端自检：`node tools/check-live.mjs https://…/anabasis-3d.html [out.png]`（断言粒子数 / 形态 / 画布尺寸 / 无 pageerror） |
 
 工具默认用本机路径找浏览器；换机器时设 `PUPPETEER_CORE`（指向 `puppeteer-core` 包）与 `EDGE_PATH`（指向 Chrome/Edge 可执行文件）即可，或在仓库里 `npm i puppeteer-core`。
 
