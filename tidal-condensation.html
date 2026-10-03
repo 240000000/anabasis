@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<!--
+    归潮 · Tidal Condensation —— 粒子绘图 / 算法艺术
+    基于 algorithmic-art 技能的 viewer.html 模板：结构、Anthropic 品牌配色与字体、
+    种子导航、Actions 区块均保持原样；算法、参数与 UI 控件为本作专属。
+    渲染约定：?frames=N 同步跑到第 N 帧后定格（用于静态出图）；?bare=1 只留画布（用于纯画布截图）。
+-->
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>归潮 · Tidal Condensation</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&family=Lora:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        /* Anthropic Brand Colors */
+        :root {
+            --anthropic-dark: #141413;
+            --anthropic-light: #faf9f5;
+            --anthropic-mid-gray: #b0aea5;
+            --anthropic-light-gray: #e8e6dc;
+            --anthropic-orange: #d97757;
+            --anthropic-blue: #6a9bcc;
+            --anthropic-green: #788c5d;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, var(--anthropic-light) 0%, #f5f3ee 100%);
+            min-height: 100vh;
+            color: var(--anthropic-dark);
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+            padding: 20px;
+            gap: 20px;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 320px;
+            flex-shrink: 0;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(20, 20, 19, 0.1);
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .sidebar h1 {
+            font-family: 'Lora', serif;
+            font-size: 24px;
+            font-weight: 500;
+            color: var(--anthropic-dark);
+            margin-bottom: 8px;
+        }
+
+        .sidebar .subtitle {
+            color: var(--anthropic-mid-gray);
+            font-size: 14px;
+            margin-bottom: 32px;
+            line-height: 1.4;
+        }
+
+        /* Control Sections */
+        .control-section {
+            margin-bottom: 32px;
+        }
+
+        .control-section h3 {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--anthropic-dark);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .control-section h3::before {
+            content: '•';
+            color: var(--anthropic-orange);
+            font-weight: bold;
+        }
+
+        /* Seed Controls */
+        .seed-input {
+            width: 100%;
+            background: var(--anthropic-light);
+            padding: 12px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            margin-bottom: 12px;
+            border: 1px solid var(--anthropic-light-gray);
+            text-align: center;
+        }
+
+        .seed-input:focus {
+            outline: none;
+            border-color: var(--anthropic-orange);
+            box-shadow: 0 0 0 2px rgba(217, 119, 87, 0.1);
+            background: white;
+        }
+
+        .seed-controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .regen-button {
+            margin-bottom: 0;
+        }
+
+        /* Parameter Controls */
+        .control-group {
+            margin-bottom: 20px;
+        }
+
+        .control-group label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--anthropic-dark);
+            margin-bottom: 8px;
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .slider-container input[type="range"] {
+            flex: 1;
+            height: 4px;
+            background: var(--anthropic-light-gray);
+            border-radius: 2px;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .slider-container input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: var(--anthropic-orange);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .slider-container input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.1);
+            background: #c86641;
+        }
+
+        .slider-container input[type="range"]::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            background: var(--anthropic-orange);
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .value-display {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: var(--anthropic-mid-gray);
+            min-width: 60px;
+            text-align: right;
+        }
+
+        /* Color Pickers */
+        .color-group {
+            margin-bottom: 16px;
+        }
+
+        .color-group label {
+            display: block;
+            font-size: 12px;
+            color: var(--anthropic-mid-gray);
+            margin-bottom: 4px;
+        }
+
+        .color-picker-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .color-picker-container input[type="color"] {
+            width: 32px;
+            height: 32px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            background: none;
+            padding: 0;
+        }
+
+        .color-value {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: var(--anthropic-mid-gray);
+        }
+
+        /* Buttons */
+        .button {
+            background: var(--anthropic-orange);
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            width: 100%;
+        }
+
+        .button:hover {
+            background: #c86641;
+            transform: translateY(-1px);
+        }
+
+        .button:active {
+            transform: translateY(0);
+        }
+
+        .button.secondary {
+            background: var(--anthropic-blue);
+        }
+
+        .button.secondary:hover {
+            background: #5a8bb8;
+        }
+
+        .button.tertiary {
+            background: var(--anthropic-green);
+        }
+
+        .button.tertiary:hover {
+            background: #6b7b52;
+        }
+
+        .button-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .button-row .button {
+            flex: 1;
+        }
+
+        /* Canvas Area */
+        .canvas-area {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 0;
+        }
+
+        #canvas-container {
+            width: 100%;
+            max-width: 1000px;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(20, 20, 19, 0.1);
+            background: white;
+        }
+
+        #canvas-container canvas {
+            display: block;
+            width: 100% !important;
+            height: auto !important;
+        }
+
+        /* Loading State */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: var(--anthropic-mid-gray);
+        }
+
+        /* 定格出图模式：只留画布（静态渲染用） */
+        body.bare .sidebar { display: none; }
+        body.bare .container { padding: 0; gap: 0; }
+        body.bare .canvas-area { padding: 0; }
+        body.bare #canvas-container { max-width: 1200px; border-radius: 0; box-shadow: none; }
+
+        /* Responsive - Stack on mobile */
+        @media (max-width: 600px) {
+            .container {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+            }
+
+            .canvas-area {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Control Sidebar -->
+        <div class="sidebar">
+            <h1>归潮</h1>
+            <div class="subtitle">粒子不是被画成形状的，是被吸引成形状的。<br>九千点洋流收敛 · 52 赫兹的呼吸</div>
+
+            <!-- Seed Section (模板固定区块) -->
+            <div class="control-section">
+                <h3>种子 Seed</h3>
+                <input type="number" id="seed-input" class="seed-input" value="52052" onchange="updateSeed()">
+                <div class="seed-controls">
+                    <button class="button secondary" onclick="previousSeed()">← 上一颗</button>
+                    <button class="button secondary" onclick="nextSeed()">下一颗 →</button>
+                </div>
+                <button class="button tertiary regen-button" onclick="randomSeedAndUpdate()">↻ 随机种子</button>
+            </div>
+
+            <!-- Parameters Section (本作专属) -->
+            <div class="control-section">
+                <h3>洋流参数</h3>
+
+                <div class="control-group">
+                    <label>粒子密度</label>
+                    <div class="slider-container">
+                        <input type="range" id="particleCount" min="2000" max="30000" step="1000" value="16000" oninput="updateParam('particleCount', this.value)">
+                        <span class="value-display" id="particleCount-value">16000</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>归潮引力</label>
+                    <div class="slider-container">
+                        <input type="range" id="homeForce" min="0.01" max="0.12" step="0.005" value="0.05" oninput="updateParam('homeForce', this.value)">
+                        <span class="value-display" id="homeForce-value">0.050</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>洋流扰动</label>
+                    <div class="slider-container">
+                        <input type="range" id="drift" min="0" max="2" step="0.05" value="0.85" oninput="updateParam('drift', this.value)">
+                        <span class="value-display" id="drift-value">0.85</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>噪声尺度</label>
+                    <div class="slider-container">
+                        <input type="range" id="noiseScale" min="0.001" max="0.008" step="0.0002" value="0.0028" oninput="updateParam('noiseScale', this.value)">
+                        <span class="value-display" id="noiseScale-value">0.0028</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>尾迹衰减</label>
+                    <div class="slider-container">
+                        <input type="range" id="trailFade" min="2" max="40" step="1" value="10" oninput="updateParam('trailFade', this.value)">
+                        <span class="value-display" id="trailFade-value">10</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>呼吸周期（帧）</label>
+                    <div class="slider-container">
+                        <input type="range" id="pulsePeriod" min="0" max="400" step="20" value="260" oninput="updateParam('pulsePeriod', this.value)">
+                        <span class="value-display" id="pulsePeriod-value">260</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Colors Section -->
+            <div class="control-section">
+                <h3>状态配色</h3>
+
+                <div class="color-group">
+                    <label>深海底色（背景）</label>
+                    <div class="color-picker-container">
+                        <input type="color" id="color1" value="#0b1622" onchange="updateColor(0, this.value)">
+                        <span class="color-value" id="color1-value">#0b1622</span>
+                    </div>
+                </div>
+
+                <div class="color-group">
+                    <label>磷光青（漂移中）</label>
+                    <div class="color-picker-container">
+                        <input type="color" id="color2" value="#6a9bcc" onchange="updateColor(1, this.value)">
+                        <span class="color-value" id="color2-value">#6a9bcc</span>
+                    </div>
+                </div>
+
+                <div class="color-group">
+                    <label>鲸落金（已落定）</label>
+                    <div class="color-picker-container">
+                        <input type="color" id="color3" value="#e0a06a" onchange="updateColor(2, this.value)">
+                        <span class="color-value" id="color3-value">#e0a06a</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions Section (模板固定区块) -->
+            <div class="control-section">
+                <h3>操作</h3>
+                <div class="button-row">
+                    <button class="button" onclick="resetParameters()">重置</button>
+                    <button class="button tertiary" onclick="regenerate()">重新演化</button>
+                </div>
+                <div class="button-row" style="margin-top:8px">
+                    <button class="button secondary" onclick="downloadPNG()">下载 PNG</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Canvas Area -->
+        <div class="canvas-area">
+            <div id="canvas-container">
+                <div class="loading">正在唤醒洋流…</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ═══════════════════════════════════════════════════════════════════════
+        // 运行模式：?frames=N 同步跑到第 N 帧定格（静态出图）；?bare=1 只留画布
+        // ═══════════════════════════════════════════════════════════════════════
+        const QUERY = new URLSearchParams(location.search);
+        const STATIC_FRAMES = Math.max(0, parseInt(QUERY.get('frames') || '0', 10) || 0);
+        const BARE = QUERY.get('bare') === '1';
+        if (BARE) document.body.classList.add('bare');
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // 参数（本作专属）—— 每一个数值都是校准过的比率
+        // ═══════════════════════════════════════════════════════════════════════
+        let params = {
+            seed: 52052,          // 隐典：52 赫兹
+            particleCount: 16000, // 密度
+            homeForce: 0.05,      // 归潮引力（弹簧系数）
+            drift: 0.85,          // 洋流扰动（噪声推力）
+            noiseScale: 0.0028,   // 噪声尺度
+            trailFade: 10,        // 尾迹衰减（每帧覆盖 alpha）
+            pulsePeriod: 260,     // 呼吸周期（帧）
+            palette: ['#0b1622', '#6a9bcc', '#e0a06a']
+        };
+        const DEFAULTS = JSON.parse(JSON.stringify(params));
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // 系统状态
+        // ═══════════════════════════════════════════════════════════════════════
+        const CELL = 16;          // 流场网格边长
+        const BUCKETS = 24;       // 收敛度色阶数（每帧仅 BUCKETS 次 stroke，性能关键）
+        let particles = [];
+        let flow = [];
+        let cols, rows;
+        let segs = [];
+        let attractors = [];
+        let whaleCx = 600, whaleCy = 600;
+        let pulseFlash = 0;
+        let stepCount = 0;
+        let ctx = null;
+
+        function setup() {
+            const canvas = createCanvas(1200, 1200);
+            canvas.parent('canvas-container');
+            const ld = document.querySelector('.loading');
+            if (ld) ld.remove();
+            ctx = drawingContext;
+            rebuild();
+
+            if (STATIC_FRAMES > 0) {
+                for (let i = 0; i < STATIC_FRAMES; i++) tick(stepCount++);
+                noLoop();
+                window.__ART__ = { seed: params.seed, frames: STATIC_FRAMES, particles: particles.length };
+                window.__READY__ = true;
+            }
+        }
+
+        function draw() {
+            tick(stepCount++);
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // 初始化 / 重建：同一颗种子 → 同一只鲸
+        // ═══════════════════════════════════════════════════════════════════════
+        function rebuild() {
+            randomSeed(params.seed);
+            noiseSeed(params.seed);
+
+            buildWhale();                       // 目标轮廓 → 目标点云
+
+            cols = Math.ceil(width / CELL);
+            rows = Math.ceil(height / CELL);
+            flow = new Array(cols * rows);
+            updateField(0);
+
+            particles = [];
+            for (let i = 0; i < params.particleCount; i++) {
+                const t = attractors.length ? attractors[Math.floor(random(attractors.length))]
+                                            : { x: random(width), y: random(height) };
+                particles.push(new Particle(t.x, t.y));
+            }
+
+            segs = [];
+            for (let b = 0; b < BUCKETS; b++) segs.push([]);
+
+            pulseFlash = 0;
+            stepCount = 0;
+            paintFull();
+        }
+
+        // 目标轮廓：以 curveVertex 绘制平滑闭合的鲸形，再按像素采样成目标点云
+        function buildWhale() {
+            const g = createGraphics(width, height);
+            g.pixelDensity(1);
+            g.clear();
+            g.noStroke();
+            g.fill(255);
+            g.curveTightness(0);
+
+            const P = [
+                [1005, 600], [930, 520], [820, 486], [680, 470], [540, 480],
+                [430, 512], [372, 560], [196, 452], [286, 600], [196, 748],
+                [372, 640], [452, 668], [560, 682], [690, 676], [770, 700],
+                [812, 776], [856, 662], [930, 644], [990, 620]
+            ];
+
+            g.beginShape();
+            g.curveVertex(P[P.length - 1][0], P[P.length - 1][1]);
+            for (const p of P) g.curveVertex(p[0], p[1]);
+            g.curveVertex(P[0][0], P[0][1]);
+            g.curveVertex(P[1][0], P[1][1]);
+            g.endShape(CLOSE);
+
+            g.loadPixels();
+            const STEP = 5, px = g.pixels;
+            attractors = [];
+            let sx = 0, sy = 0;
+            for (let y = 0; y < height; y += STEP) {
+                for (let x = 0; x < width; x += STEP) {
+                    if (px[4 * (y * width + x) + 3] > 128) {
+                        attractors.push({ x: x + random(-2, 2), y: y + random(-2, 2) });
+                        sx += x; sy += y;
+                    }
+                }
+            }
+            if (attractors.length) { whaleCx = sx / attractors.length; whaleCy = sy / attractors.length; }
+            g.remove();
+        }
+
+        // 洋流：粗网格 Perlin 向量场，每隔若干帧刷新（性能关键）
+        function updateField(t) {
+            const z = t * 0.0022 + params.seed * 0.0007;
+            const k = params.noiseScale * CELL;
+            for (let y = 0; y < rows; y++) {
+                for (let x = 0; x < cols; x++) {
+                    const a = noise(x * k, y * k, z) * TWO_PI * 2.4;
+                    flow[x + y * cols] = { x: Math.cos(a), y: Math.sin(a) };
+                }
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // 粒子：噪声漂移 + 归巢弹簧 + 切向回旋 + 呼吸脉冲
+        // ═══════════════════════════════════════════════════════════════════════
+        class Particle {
+            constructor(hx, hy) {
+                this.hx = hx;
+                this.hy = hy;
+                this.x = random(width);
+                this.y = random(height);
+                this.px = this.x;
+                this.py = this.y;
+                this.vx = random(-1, 1);
+                this.vy = random(-1, 1);
+                this.phase = random(TWO_PI);
+                this.b = 0;
+            }
+
+            step(t) {
+                if (pulseFlash > 0) {                    // 呼吸：径向推开，远处推得更狠
+                    const dx = this.x - whaleCx, dy = this.y - whaleCy;
+                    const d = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+                    const k = pulseFlash * (0.5 + 1.5 * (d / 700));
+                    this.vx += (dx / d) * k;
+                    this.vy += (dy / d) * k;
+                }
+
+                const dx = this.hx - this.x, dy = this.hy - this.y;
+                const coh = 1 / (1 + (dx * dx + dy * dy) / 9000);   // 收敛度 0..1
+                const loose = 1 - coh;
+
+                const cx = Math.min(cols - 1, Math.max(0, Math.floor(this.x / CELL)));
+                const cy = Math.min(rows - 1, Math.max(0, Math.floor(this.y / CELL)));
+                const f = flow[cx + cy * cols];
+
+                const swirl = 0.0075 * loose * params.drift;
+                this.vx += dx * params.homeForce + f.x * params.drift * loose * 0.9 - dy * swirl;
+                this.vy += dy * params.homeForce + f.y * params.drift * loose * 0.9 + dx * swirl;
+
+                // 环境微动：不随收敛度归零——落定之后画面仍须呼吸，
+                // 否则尾迹停止落笔，会被褪色逐帧吃光（画面归于死黑）。
+                this.vx += f.x * params.drift * 0.07 + Math.cos(t * 0.05 + this.phase) * 0.065;
+                this.vy += f.y * params.drift * 0.07 + Math.sin(t * 0.047 + this.phase) * 0.065;
+
+                this.vx *= 0.90;
+                this.vy *= 0.90;
+
+                this.px = this.x;
+                this.py = this.y;
+                this.x += this.vx;
+                this.y += this.vy;
+
+                // 状态色：用落定后的实际偏差（1–3 px 量级）映射整条色阶，
+                // 于是核心稳如落尘（鲸落金）、边缘仍在被洋流拨动（磷光青）。
+                const ex = this.hx - this.x, ey = this.hy - this.y;
+                const ink = 1 / (1 + (ex * ex + ey * ey) / 6);
+                this.b = Math.min(BUCKETS - 1, Math.floor(ink * BUCKETS));
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // 每一帧：褪色 → 刷新流场 → 脉冲 → 步进 → 按收敛度分桶批量描线
+        // ═══════════════════════════════════════════════════════════════════════
+        function tick(t) {
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = rgbaOf(params.palette[0], params.trailFade / 255);
+            ctx.fillRect(0, 0, width, height);
+
+            if (t % 24 === 0) updateField(t);
+
+            if (params.pulsePeriod > 0 && t > 0 && t % params.pulsePeriod === 0) pulseFlash = 2.4;
+            else if (pulseFlash > 0) pulseFlash *= 0.86;
+            if (pulseFlash < 0.02) pulseFlash = 0;
+
+            for (let b = 0; b < BUCKETS; b++) segs[b].length = 0;
+            for (let i = 0; i < particles.length; i++) {
+                const p = particles[i];
+                p.step(t);
+                const arr = segs[p.b];
+                if (Math.abs(p.x - p.px) + Math.abs(p.y - p.py) > 0.02) arr.push(p.px, p.py, p.x, p.y);
+            }
+
+            const cA = color(params.palette[1]);
+            const cB = color(params.palette[2]);
+            ctx.lineCap = 'round';
+            for (let b = 0; b < BUCKETS; b++) {
+                const arr = segs[b];
+                if (!arr.length) continue;
+                const f = b / (BUCKETS - 1);
+                const c = lerpColor(cA, cB, f);
+                ctx.strokeStyle = rgbaOf([red(c), green(c), blue(c)], 0.18 + 0.42 * f);
+                ctx.lineWidth = 0.7 + 1.15 * f;
+                ctx.beginPath();
+                for (let i = 0; i < arr.length; i += 4) {
+                    ctx.moveTo(arr[i], arr[i + 1]);
+                    ctx.lineTo(arr[i + 2], arr[i + 3]);
+                }
+                ctx.stroke();
+            }
+        }
+
+        function paintFull() {
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = params.palette[0];
+            ctx.fillRect(0, 0, width, height);
+        }
+
+        function rgbaOf(c, a) {
+            if (Array.isArray(c)) return `rgba(${Math.round(c[0])},${Math.round(c[1])},${Math.round(c[2])},${a})`;
+            const v = color(c);
+            return `rgba(${Math.round(red(v))},${Math.round(green(v))},${Math.round(blue(v))},${a})`;
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // UI 控件
+        // ═══════════════════════════════════════════════════════════════════════
+        function updateParam(name, value) {
+            const v = parseFloat(value);
+            params[name] = v;
+            const el = document.getElementById(name + '-value');
+            if (el) el.textContent = name === 'noiseScale' ? v.toFixed(4)
+                                     : name === 'homeForce' ? v.toFixed(3)
+                                     : String(v);
+            if (name === 'particleCount' || name === 'pulsePeriod' || name === 'noiseScale') rebuild();
+        }
+
+        function updateColor(idx, value) {
+            params.palette[idx] = value;
+            const el = document.getElementById('color' + (idx + 1) + '-value');
+            if (el) el.textContent = value;
+            if (idx === 0) paintFull();
+        }
+
+        function regenerate() {
+            rebuild();
+            if (STATIC_FRAMES === 0) loop();
+        }
+
+        function downloadPNG() {
+            saveCanvas('归潮-seed' + params.seed, 'png');
+        }
+
+        function updateSeedDisplay() {
+            document.getElementById('seed-input').value = params.seed;
+        }
+
+        function updateSeed() {
+            const input = document.getElementById('seed-input');
+            const newSeed = parseInt(input.value, 10);
+            if (newSeed && newSeed > 0) {
+                params.seed = newSeed;
+                rebuild();
+                if (STATIC_FRAMES === 0) loop();
+            } else {
+                updateSeedDisplay();
+            }
+        }
+
+        function previousSeed() {
+            params.seed = Math.max(1, params.seed - 1);
+            updateSeedDisplay();
+            rebuild();
+            if (STATIC_FRAMES === 0) loop();
+        }
+
+        function nextSeed() {
+            params.seed = params.seed + 1;
+            updateSeedDisplay();
+            rebuild();
+            if (STATIC_FRAMES === 0) loop();
+        }
+
+        function randomSeedAndUpdate() {
+            params.seed = Math.floor(Math.random() * 999999) + 1;
+            updateSeedDisplay();
+            rebuild();
+            if (STATIC_FRAMES === 0) loop();
+        }
+
+        function resetParameters() {
+            params = JSON.parse(JSON.stringify(DEFAULTS));
+
+            const ui = [['particleCount', params.particleCount], ['homeForce', params.homeForce],
+                        ['drift', params.drift], ['noiseScale', params.noiseScale],
+                        ['trailFade', params.trailFade], ['pulsePeriod', params.pulsePeriod]];
+            for (const [id, v] of ui) {
+                const input = document.getElementById(id);
+                if (input) input.value = v;
+                const display = document.getElementById(id + '-value');
+                if (display) display.textContent = id === 'noiseScale' ? v.toFixed(4)
+                                                      : id === 'homeForce' ? v.toFixed(3) : String(v);
+            }
+            for (let i = 0; i < 3; i++) {
+                const input = document.getElementById('color' + (i + 1));
+                if (input) input.value = params.palette[i];
+                const display = document.getElementById('color' + (i + 1) + '-value');
+                if (display) display.textContent = params.palette[i];
+            }
+
+            updateSeedDisplay();
+            rebuild();
+            if (STATIC_FRAMES === 0) loop();
+        }
+
+        window.addEventListener('load', function () {
+            updateSeedDisplay();
+        });
+    </script>
+</body>
+</html>

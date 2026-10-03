@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>洄游 · Anabasis — 可旋转的 3D 粒子形态场</title>
+<meta name="description" content="六万个粒子在四种形态与「你的图片」之间洄游。three.js 单文件生成艺术作品，附完整出图与验收工具链。">
+<style>
+  :root{
+    --ink:#08090a; --ink-2:#101214; --line:#22262b;
+    --fog:#8b949e; --paper:#f2f2f2;
+    --acid:#fffa00; --mint:#00ffa2; --magenta:#ff1aac;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--ink);color:var(--paper);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased}
+  a{color:inherit}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 24px}
+
+  header{padding:64px 0 28px;border-bottom:1px solid var(--line)}
+  .kicker{font-size:12px;letter-spacing:.32em;text-transform:uppercase;color:var(--mint);margin:0 0 18px}
+  h1{margin:0;font-size:clamp(38px,7vw,76px);line-height:1.02;letter-spacing:-.02em;font-weight:800}
+  h1 .en{display:block;font-size:.34em;letter-spacing:.24em;font-weight:500;color:var(--acid);margin-top:14px;text-transform:uppercase}
+  .lede{margin:22px 0 0;max-width:60ch;font-size:17px;line-height:1.75;color:#c9d1d9}
+  .lede b{color:var(--paper)}
+  .cta{display:flex;flex-wrap:wrap;gap:12px;margin:28px 0 0}
+  .btn{display:inline-block;padding:12px 20px;border:1px solid var(--line);border-radius:999px;
+    text-decoration:none;font-size:14px;letter-spacing:.02em;transition:.18s}
+  .btn:hover{border-color:var(--acid);color:var(--acid);transform:translateY(-1px)}
+  .btn.primary{background:var(--acid);color:#0b0b0b;border-color:var(--acid);font-weight:700}
+  .btn.primary:hover{background:#fff;color:#0b0b0b;border-color:#fff}
+
+  .stage{margin:34px 0 0;border:1px solid var(--line);border-radius:16px;overflow:hidden;background:#000}
+  .stage iframe{display:block;width:100%;height:min(78vh,820px);border:0}
+  .stage-note{display:flex;gap:14px;flex-wrap:wrap;align-items:center;justify-content:space-between;
+    padding:12px 16px;border-top:1px solid var(--line);font-size:13px;color:var(--fog);background:var(--ink-2)}
+  kbd{border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:12px;color:#c9d1d9;background:#16191c}
+
+  section{padding:56px 0;border-bottom:1px solid var(--line)}
+  h2{margin:0 0 8px;font-size:22px;letter-spacing:.01em}
+  .sub{margin:0 0 26px;color:var(--fog);font-size:14px}
+  .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+  figure{margin:0}
+  figure img{width:100%;display:block;border:1px solid var(--line);border-radius:12px;background:#000}
+  figcaption{margin-top:8px;font-size:12.5px;color:var(--fog)}
+  .cards{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+  .card{border:1px solid var(--line);border-radius:12px;padding:18px;background:var(--ink-2)}
+  .card h3{margin:0 0 8px;font-size:15px;color:var(--acid)}
+  .card p{margin:0;font-size:13.5px;line-height:1.7;color:#c9d1d9}
+  code{background:#16191c;border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:12.5px}
+  pre{background:#0d0f11;border:1px solid var(--line);border-radius:12px;padding:14px 16px;overflow:auto;font-size:12.5px;line-height:1.7}
+  pre code{background:none;border:0;padding:0}
+  footer{padding:40px 0 64px;color:var(--fog);font-size:13px}
+  footer a{color:var(--mint);text-decoration:none}
+  footer a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <p class="kicker">three.js · 60 000 particles · single file</p>
+    <h1>洄游<span class="en">Anabasis</span></h1>
+    <p class="lede">
+      六万个粒子在四种形态之间洄游——<b>鲸骨架 / 棱镜环 / 归潮字 / 星壳</b>，
+      以及第五种形态：<b>你上传的图片</b>。形态不是被建模出来的，是被吸引出来的；
+      拖拽旋转，双击触发故障带。
+    </p>
+    <div class="cta">
+      <a class="btn primary" href="anabasis-3d.html">打开作品（全屏）</a>
+      <a class="btn" href="tidal-condensation.html">前作《归潮》· p5.js</a>
+      <a class="btn" href="README.md">README / 工具链</a>
+      <a class="btn" href="https://github.com/240000000/anabasis">GitHub</a>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="stage">
+    <iframe src="anabasis-3d.html" title="洄游 · Anabasis" loading="lazy" allow="fullscreen"></iframe>
+    <div class="stage-note">
+      <span>直接在框里玩：拖拽旋转 · 滚轮缩放 · 双击故障 · 拖入图片变粒子</span>
+      <span><kbd>Ctrl</kbd>+<kbd>V</kbd> 粘贴图片即可成形</span>
+    </div>
+  </div>
+</div>
+
+<section>
+  <div class="wrap">
+    <h2>形态与动图</h2>
+    <p class="sub">全部由同一套点云着色器渲染，同一颗种子（52052）可完整复现。</p>
+    <div class="grid">
+      <figure><img src="media/anabasis-whale.webp" alt="鲸形态动画"><figcaption>鲸骨架 → 棱镜环（WebP 动图，48 帧循环）</figcaption></figure>
+      <figure><img src="media/anabasis-image.webp" alt="图片形态动画"><figcaption>图片识别成粒子（WebP 动图，48 帧循环）</figcaption></figure>
+      <figure><img src="media/still-word.png" alt="归潮字"><figcaption>归潮字 · frames=210</figcaption></figure>
+      <figure><img src="media/ui-wide-image.png" alt="界面"><figcaption>工作台：右侧铺满 + 原图对照卡</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>技术要点</h2>
+    <p class="sub">无视觉通道也能验收——每张静帧都用像素统计打分。</p>
+    <div class="cards">
+      <div class="card"><h3>点云着色器</h3><p>距离衰减 alpha、层深加权、<code>gl_PointSize</code> 随视距放大；点精灵三段辉光 + <code>discard</code> 圆形掩膜。</p></div>
+      <div class="card"><h3>屏幕空间故障带</h3><p>4 条水平带内 <code>mvPosition.x += glitchXOffset * gx</code>，双击即触发。</p></div>
+      <div class="card"><h3>图片 → 粒子</h3><p>亮度 / 透明 / Sobel 边缘三模式识别，按亮度给深度浮雕，并按可见半高自动贴合取景框。</p></div>
+      <div class="card"><h3>可复现出图</h3><p><code>?frames=N</code> 同步跑帧后停住并置 <code>__READY__</code>，配无头浏览器即可定格出图与动画序列。</p></div>
+    </div>
+    <pre><code>node tools/render-3d.mjs anabasis-3d.html out.png "frames=210&amp;shape=2&amp;cam=0.4,0.18,17.5"
+node tools/analyze-art.mjs out.png        # 亮度均值 / 亮部占比 / bbox</code></pre>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    MIT License · 由 <a href="https://threejs.org/">three.js</a> 与 <a href="https://p5js.org/">p5.js</a> 驱动 ·
+    完整源码与工具链见 <a href="https://github.com/240000000/anabasis">GitHub</a>
+  </div>
+</footer>
+
+</body>
+</html>
