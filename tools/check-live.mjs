@@ -44,11 +44,14 @@ try {
     const shot = outPng ? path.resolve(outPng) : null
     if (shot) await page.screenshot({ path: shot })
     const size = await page.evaluate(() => { const c = document.querySelector('canvas'); return c ? [c.width, c.height, c.clientWidth, c.clientHeight] : null })
-    const ok = errs.length === 0 && diag && diag.points > 0 && Array.isArray(diag.weights) && size && size[0] > 0
+    // 带 text= 的查询串必须真的排出文字形态（否则说明线上那份还没带上文字功能）
+    const wantText = /(^|&)text=/.test(query || '')
+    const textOk = !wantText || !!(diag && diag.text && /^文字/.test(diag.formation || ''))
+    const ok = errs.length === 0 && diag && diag.points > 0 && Array.isArray(diag.weights) && size && size[0] > 0 && textOk
     if (!ok) code = 2
     console.log(JSON.stringify({
-        ok, url: target, loadMs: Date.now() - t0,
-        diag: { points: diag.points, formation: diag.formation, weights: diag.weights, glitch: diag.glitch, cam: diag.cam },
+        ok, url: target, loadMs: Date.now() - t0, wantText, textOk,
+        diag: { points: diag.points, formation: diag.formation, weights: diag.weights, glitch: diag.glitch, cam: diag.cam, text: diag.text || null },
         canvas: size, pageErrors: errs, failedRequests: failed.filter(u => !/favicon/.test(u)),
         screenshot: shot
     }, null, 1))

@@ -32,6 +32,11 @@ let params = {
     imgInvert: false,       // 反色识别（深底浅图 / 浅底深图）
     imgColor: true,         // true = 用图片自身颜色；false = 单色（用主色着色）
     imgLock: false,         // 锁定图片形态（不参与自动循环）
+    // ── 文字 → 粒子（任意长度文本：自动折行 + 自动缩放字号 → 栅格化 → 复用同一套点云管线）──
+    txtMaxSize: 220,        // 起始字号 px（实际字号会按文本多少自动放大/缩小到恰好铺满）
+    txtRes: 900,            // 排版精度：栅格画布宽度 px（越大字形越细腻、采样池越大）
+    txtLineGap: 1.16,       // 行距（相对字号）
+    txtAlign: 'center',     // center 居中 / left 左对齐
     colorPalette: ['#fffa00', '#00ffa2', '#ff1aac']
 };
 let defaultParams = { ...params };
@@ -56,6 +61,11 @@ if (Q.get('fit')) params.imgFit = parseFloat(Q.get('fit'));
 if (Q.get('invert') === '1') params.imgInvert = true;
 if (Q.get('imgcolor') === '0') params.imgColor = false;
 if (Q.get('imglock') === '1') params.imgLock = true;
+// 文字 → 粒子：?text=任意文字（长度不限）直接排版成粒子文字；?tres= 栅格宽度 / ?tmax= 起始字号 / ?talign=left
+const TEXT_Q = Q.get('text') || '';
+if (Q.get('tres')) params.txtRes = parseInt(Q.get('tres'), 10);
+if (Q.get('tmax')) params.txtMaxSize = parseInt(Q.get('tmax'), 10);
+if (Q.get('talign')) params.txtAlign = Q.get('talign');
 const SRC_Q = Q.get('src');              // 原图对照卡：缺省自动（有图就显示）／?src=1 强制开／?src=0 强制关
 if (BARE) {
     // 出图模式：把容器链全部钉死成 SIZE×SIZE，避免模板的 max-width:1000px + overflow:hidden 把画布右侧裁掉 100px 并露出白底
@@ -106,6 +116,8 @@ let imgPool = null;        // {w,h,n,px:[x,y,lum,r,g,b]*n} 采样池
 let imgFormation = null;   // {pos:Float32Array(n*3), col:Float32Array(n*3)} 当前粒子数下的图片形态
 let imgSource = null;      // 图片元素（改阈值/精度时重新采样用）
 let imgLabel = '';
+// 文字 → 粒子 状态
+let textInfo = null;       // 最近一次生成的文字排版信息（有值 = 第五形态来自文字而非图片）
 // 视口与原图对照卡
 let viewW = SIZE, viewH = SIZE;   // 交互模式填满右侧区域（可非正方形）；出图模式恒为 SIZE×SIZE
 let srcShown = SRC_Q !== '0';     // 原图对照卡是否显示
@@ -511,6 +523,10 @@ function step(dt) {
             label: imgLabel, mode: params.imgMode, thr: params.imgThreshold, invert: params.imgInvert,
             res: [imgPool.w, imgPool.h], samples: imgPool.n, colored: params.imgColor, lock: params.imgLock
         } : null,
+        text: textInfo ? {
+            chars: textInfo.chars, glyphs: textInfo.glyphs, lines: textInfo.lines,
+            size: textInfo.size, res: [textInfo.w, textInfo.h], align: params.txtAlign
+        } : null,
         formation: formLabel(),
         glitch: +glitchStrength.toFixed(3), cam: { az: +camAz.toFixed(3), pol: +camPol.toFixed(3), dist: camDist },
         autoRotate
@@ -540,7 +556,7 @@ let burstRound = 0;
 function formCount() { return imgFormation ? FORMATION_COUNT + 1 : FORMATION_COUNT; }
 function oneHot(k) { const v = [0, 0, 0, 0, 0]; v[k] = 1; return v; }
 function morphTo(idx) { morphFrom = curW.slice(); morphToIdx = idx; phase = 'morph'; phaseT = 0; }
-function formName(i) { return i === IMG_FORMATION ? ('图片 · ' + (imgLabel || '未载入')) : FORMATION_NAMES[i]; }
+function formName(i) { return i === IMG_FORMATION ? ((textInfo ? '' : '图片 · ') + (imgLabel || '未载入')) : FORMATION_NAMES[i]; }
 function formLabel() { return phase === 'dwell' ? formName(morphIndex) : formName(morphIndex) + ' → ' + formName(morphToIdx); }
 function setImgStatus(t) { const el = document.getElementById('img-status'); if (el) el.textContent = t; }
 
@@ -548,7 +564,8 @@ function setImgStatus(t) { const el = document.getElementById('img-status'); if 
 function buildImagePool(imgEl) {
     const iw = imgEl.naturalWidth || imgEl.width, ih = imgEl.naturalHeight || imgEl.height;
     if (!iw || !ih) { imgPool = null; return; }
-    const maxSide = Math.max(32, Math.min(1024, params.imgRes | 0));
+    // 文字形态自带采样精度（_poolRes = 排版栅格宽度，字形需要高分辨率才锐），图片才用滑杆 imgRes
+    const maxSide = Math.max(32, Math.min(1024, ((imgEl && imgEl._poolRes) || params.imgRes) | 0));
     let W, H;
     if (iw >= ih) { W = maxSide; H = Math.max(8, Math.round(maxSide * ih / iw)); }
     else { H = maxSide; W = Math.max(8, Math.round(maxSide * iw / ih)); }
@@ -694,14 +711,20 @@ function toggleSplit(btn) {
 
 function reportImage() {
     updateSrcCard();
-    if (!imgPool) { setImgStatus(imgSource ? '识别出 0 个点：阈值太高或模式不匹配，换个模式试试' : '未加载图片'); return; }
+    const kind = textInfo ? '文字' : '图片';
+    if (!imgPool) { setImgStatus(imgSource ? (kind + '：识别出 0 个点，阈值太高或模式不匹配，换个模式试试') : '未加载图片'); return; }
     const modeName = { luma: '亮度阈值', alpha: '透明通道', edge: '边缘检测' }[params.imgMode] || params.imgMode;
     const cover = imgPool.n >= params.particleCount ? '1:1' : (params.particleCount / Math.max(1, imgPool.n)).toFixed(1) + ':1';
-    setImgStatus('图片：' + (imgLabel || 'image') + ' · 识别 ' + imgPool.w + '×' + imgPool.h + ' → ' + imgPool.n + ' 个点 · '
+    setImgStatus(kind + '：' + (imgLabel || 'image') + ' · 识别 ' + imgPool.w + '×' + imgPool.h + ' → ' + imgPool.n + ' 个点 · '
         + modeName + ' / 阈值 ' + params.imgThreshold + (params.imgInvert ? ' / 反色' : '')
         + ' · ' + (params.imgColor ? '原色' : '单色') + (params.imgLock ? ' · 已锁定' : '')
         + ' · 尺寸 ' + (params.imgFit || 0.82).toFixed(2) + ' / 浮雕 ' + params.imgRelief.toFixed(2)
         + ' · 粒子覆盖 ' + cover);
+    if (textInfo) {
+        setTxtStatus('文字 ' + textInfo.chars + ' 字 → ' + textInfo.lines + ' 行 · 字号 ' + textInfo.size + 'px · 栅格 '
+            + textInfo.w + '×' + textInfo.h + ' → ' + imgPool.n + ' 个点 · 粒子覆盖 ' + cover
+            + (params.imgLock ? ' · 已锁定' : ''));
+    }
 }
 
 function onImageReady(im) {
@@ -741,7 +764,7 @@ function handleImageFile(file) {
 }
 
 function morphToImageNow() {
-    if (!imgFormation) { setImgStatus('先上传一张图片（也可以把图直接拖到画布上 / Ctrl+V 粘贴）'); return; }
+    if (!imgFormation) { setImgStatus(textInfo ? '先生成一段文字粒子（侧栏「文字 → 粒子」）' : '先上传一张图片（也可以把图直接拖到画布上 / Ctrl+V 粘贴）'); return; }
     if (FORCE_SHAPE >= 0) return;
     if (curW[IMG_FORMATION] > 0.995) {          // 已经在图片形态：不重复形变（避免「图片 → 图片」空转），只把标签摆正
         morphIndex = IMG_FORMATION; morphToIdx = IMG_FORMATION; phase = 'dwell'; phaseT = 0; curW = oneHot(IMG_FORMATION);
@@ -751,6 +774,7 @@ function morphToImageNow() {
 }
 function clearImage() {
     imgPool = null; imgFormation = null; imgSource = null; imgLabel = '';
+    textInfo = null;                            // 文字与图片共用第五形态：清图同时清掉文字标记
     params.imgLock = false;                     // 清图同时解锁，避免按钮停在「开」但已无图可锁
     const lb = document.getElementById('imglock-btn');
     if (lb) lb.textContent = '锁定图片形态：关';
@@ -821,6 +845,139 @@ function bindImageDrop() {
     });
 }
 
+// ── 文字 → 粒子：任意长度文本 → 自动折行 / 自动字号 → 栅格化 → 走与图片完全相同的识别管线 ──
+//    所以旋转、缩放、亮度浮雕、单色/原色、原图对照卡、对比分屏对文字全都直接可用
+const TEXT_FONT = 'Georgia, "Times New Roman", "Songti SC", SimSun, "Microsoft YaHei", serif';
+
+function setTxtStatus(t) { const el = document.getElementById('txt-status'); if (el) el.textContent = t; }
+
+let _measureCtx = null;
+function textCtx(size) {
+    if (!_measureCtx) _measureCtx = makeCanvas(8, 8).getContext('2d');
+    _measureCtx.font = '700 ' + Math.max(6, size) + 'px ' + TEXT_FONT;
+    return _measureCtx;
+}
+
+// 单段（不含换行）折行：西文优先在空格处断，中文逐字断
+function wrapSegment(seg, ctx, maxW) {
+    const out = [];
+    let line = '';
+    for (let i = 0; i < seg.length; i++) {
+        const ch = seg[i], test = line + ch;
+        if (!line || ctx.measureText(test).width <= maxW) { line = test; continue; }
+        let cut = -1;
+        for (let k = line.length - 1; k > Math.max(0, line.length - 24); k--) {
+            if (line[k] === ' ' || line[k] === '\t' || line[k] === '\u3000') { cut = k + 1; break; }
+        }
+        if (cut > 0) { out.push(line.slice(0, cut).replace(/\s+$/, '')); line = line.slice(cut) + ch; }
+        else { out.push(line); line = ch; }
+    }
+    if (line.length) out.push(line);
+    return out;
+}
+
+// 按文本多少自动定字号：短文本放大到铺满、长文本一路缩到装得下（不截断、不溢出，长度不限）
+function fitTextLayout(text, maxW, maxH, startSize) {
+    let size = Math.max(6, startSize), lines = [];
+    for (let it = 0; it < 60; it++) {
+        const ctx = textCtx(size);
+        lines = [];
+        text.split(/\r?\n/).forEach(seg => wrapSegment(seg, ctx, maxW).forEach(l => lines.push(l)));
+        if (!lines.length) lines = [''];
+        let widest = 0;
+        for (const l of lines) widest = Math.max(widest, ctx.measureText(l).width);
+        const lh = size * Math.max(1.0, params.txtLineGap);
+        const blockH = Math.max(lh, lines.length * lh);
+        let k = Math.min(maxH / blockH, widest > 0 ? maxW / widest : 4);
+        if (!isFinite(k) || k <= 0) k = 1;
+        k = Math.max(0.45, Math.min(2.4, k));          // 每轮最多变 2.4×/0.45×，避免来回震荡
+        if (Math.abs(k - 1) < 0.015 || size >= 1400) break;
+        size = Math.max(6, Math.min(1400, size * k));
+    }
+    return { size: Math.max(6, Math.round(size)), lines };
+}
+
+// 排版 → 栅格画布（白字透明底：配合 alpha 采样，字形边缘最锐）
+function drawTextRaster(text, W, H) {
+    const cv = makeCanvas(W, H), cx = cv.getContext('2d', { willReadFrequently: true });
+    const padX = Math.max(8, Math.round(W * 0.05)), padY = Math.max(6, Math.round(H * 0.07));
+    const boxW = W - padX * 2, boxH = H - padY * 2;
+    const fit = fitTextLayout(text, boxW, boxH, params.txtMaxSize);
+    const size = fit.size, lines = fit.lines;
+    cx.clearRect(0, 0, W, H);
+    cx.fillStyle = '#fff';
+    cx.font = '700 ' + size + 'px ' + TEXT_FONT;
+    cx.textAlign = params.txtAlign === 'left' ? 'left' : 'center';
+    cx.textBaseline = 'middle';
+    const lh = size * Math.max(1.0, params.txtLineGap);
+    const blockH = lines.length * lh;
+    const x0 = params.txtAlign === 'left' ? padX : W / 2;
+    const y0 = padY + Math.max(0, (boxH - blockH) / 2) + lh / 2;
+    for (let i = 0; i < lines.length; i++) cx.fillText(lines[i], x0, y0 + i * lh);
+    let glyphs = 0;
+    for (const l of lines) glyphs += l.replace(/\s/g, '').length;
+    return { cv, size, lines: lines.length, glyphs, boxW, boxH };
+}
+
+// 文字 → 第五形态点云的唯一入口（UI 按钮与 ?text= 都走这里）
+function textFormationReady(text) {
+    const t = String(text == null ? '' : text);
+    if (!t.trim()) { setTxtStatus('先输入一点文字（中英文都行，长度不限）'); return Promise.resolve(null); }
+    // 栅格宽高比贴合当前可视区：铺进画面后不会两边空一片、也不会顶到边
+    const AR = Math.max(0.7, Math.min(3.4, (camera ? camera.aspect : 1) * 0.96));
+    const W = Math.max(320, Math.min(1024, params.txtRes | 0));
+    const H = Math.max(160, Math.round(W / AR));
+    const r = drawTextRaster(t, W, H);
+    return new Promise(resolve => {
+        const im = new Image();
+        im.onload = () => {
+            im._poolRes = W;                        // 文字用排版栅格宽度采样（不受图片精度滑杆限制，字形才锐）
+            const one = t.replace(/\s+/g, ' ').trim();
+            const snip = one.slice(0, 14);
+            imgLabel = '文字 · ' + snip + (one.length > 14 ? '…' : '');
+            textInfo = { text: t, chars: one.length, glyphs: r.glyphs, lines: r.lines, size: r.size, w: W, h: H };
+            params.imgMode = 'alpha';               // 白字透明底 → 透明通道取样最忠实
+            const sel = document.getElementById('img-mode'); if (sel) sel.value = 'alpha';
+            params.imgColor = false;                // 默认单色：交给主色染色（想留白字就点「图片原色」）
+            const cb = document.getElementById('imgcolor-btn'); if (cb) cb.textContent = '图片原色：关';
+            colors();
+            onImageReady(im);
+            resolve(im);
+        };
+        im.onerror = () => { setTxtStatus('文字栅格化失败'); resolve(null); };
+        im.src = r.cv.toDataURL('image/png');
+    });
+}
+
+function generateTextFormation() {
+    const ta = document.getElementById('txt-input');
+    return textFormationReady(ta ? ta.value : '');
+}
+const TEXT_SAMPLE = '归潮\nAnabasis · 洄游\n任意长度文字都能变成粒子\n不限字数：中英文混排、换行、长段落都可以';
+function loadTextSample() {
+    const ta = document.getElementById('txt-input');
+    if (ta) ta.value = TEXT_SAMPLE;
+    generateTextFormation();
+}
+function clearTextInput() {
+    const ta = document.getElementById('txt-input');
+    if (ta) ta.value = '';
+    if (textInfo) clearImage();          // 文字与图片共用第五形态这一个槽位
+    setTxtStatus('已清空输入');
+}
+function setTextAlign(v) {
+    params.txtAlign = v;
+    const sel = document.getElementById('txt-align'); if (sel) sel.value = params.txtAlign;
+    if (textInfo) textFormationReady(textInfo.text);
+}
+function bindTextInput() {
+    const ta = document.getElementById('txt-input');
+    if (!ta) return;
+    ta.addEventListener('keydown', e => {       // Ctrl/⌘ + Enter 直接生成
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); generateTextFormation(); }
+    });
+}
+
 // ── 启动 ───────────────────────────────────────────────────────────────────
 function initializeSystem() {
     clockTime = 0; morphIndex = 0; phase = 'dwell'; phaseT = 0; lastBurstIndex = -1; glitchStrength = 0;
@@ -849,7 +1006,12 @@ async function boot() {
     updateSeedDisplay();
     updateSrcCard();
     bindImageDrop();
-    if (IMG_URL) {
+    bindTextInput();
+    if (TEXT_Q) {
+        // ?text=任意文字（长度不限）：先排版成粒子文字，再跑帧 —— 无头出图与分享链接用
+        const ta = document.getElementById('txt-input'); if (ta) ta.value = TEXT_Q;
+        await textFormationReady(TEXT_Q);
+    } else if (IMG_URL) {
         // 出图 / 分享链接：直接用 ?img= 喂图片地址（无头渲染必须先等图片就位，再跑帧）
         imgLabel = IMG_URL.indexOf('data:') === 0 ? 'data-url' : (IMG_URL.split('/').pop() || 'image');
         try { await loadImageURL(IMG_URL); } catch (e) { setImgStatus(e.message); }
@@ -895,6 +1057,8 @@ function updateParam(name, value) {
     // 图片相关的三个参数改完要重新识别一次（阈值 / 精度需要重采样，起伏只需重新铺点）
     if (name === 'imgThreshold' || name === 'imgRes') { if (imgSource) { buildImagePool(imgSource); applyImageFormation(); reportImage(); } }
     if (name === 'imgRelief' || name === 'imgFit') { if (imgPool) { assignImage(params.particleCount >>> 0); applyImageFormation(); reportImage(); } }
+    // 文字排版参数：改了要重新排版 + 重新采样（字形大小会变）
+    if (name === 'txtMaxSize' || name === 'txtRes') { if (textInfo) textFormationReady(textInfo.text); }
 }
 
 function updateColor(colorId, value) {
@@ -930,7 +1094,7 @@ function randomSeedAndUpdate() { params.seed = Math.floor(Math.random() * 999999
 
 function resetParameters() {
     params = { ...defaultParams };
-    ['particleCount', 'pointSize', 'morphDur', 'dwell', 'glitch', 'drift', 'rotateSpeed', 'imgThreshold', 'imgRes', 'imgRelief', 'imgFit'].forEach(k => {
+    ['particleCount', 'pointSize', 'morphDur', 'dwell', 'glitch', 'drift', 'rotateSpeed', 'imgThreshold', 'imgRes', 'imgRelief', 'imgFit', 'txtMaxSize', 'txtRes'].forEach(k => {
         const el = document.getElementById(k); if (el) el.value = params[k];
         const lb = document.getElementById(k + '-value'); if (lb) lb.textContent = params[k];
     });
@@ -939,7 +1103,9 @@ function resetParameters() {
     const lbtn = document.getElementById('imglock-btn'); if (lbtn) lbtn.textContent = '锁定图片形态：' + (params.imgLock ? '开' : '关');
     const ibtn = document.getElementById('imginvert-btn'); if (ibtn) ibtn.textContent = '反色：' + (params.imgInvert ? '开' : '关');
     if (imgSource) { buildImagePool(imgSource); }
+    const alignSel = document.getElementById('txt-align'); if (alignSel) alignSel.value = params.txtAlign;
     reportImage();
+    if (textInfo) textFormationReady(textInfo.text);   // 文字：按默认参数重新排版一遍（模式/字号都可能被重置）
     for (let i = 0; i < 3; i++) {
         const el = document.getElementById('color' + (i + 1)); if (el) el.value = params.colorPalette[i];
         const lb = document.getElementById('color' + (i + 1) + '-value'); if (lb) lb.textContent = params.colorPalette[i];
